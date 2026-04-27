@@ -1,5 +1,7 @@
 # Project Whirlwind — Platform Docs
 
+**Rendered docs:** https://project-whirlwind.github.io/platform-docs/
+
 This repo is the engineering source of truth for the Whirlwind platform. It documents architecture decisions, service contracts, development standards, and operational runbooks.
 
 **MindBlossom v2** is the first product built on this platform. Future products inherit the same infrastructure and shared services.
