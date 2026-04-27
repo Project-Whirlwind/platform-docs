@@ -92,7 +92,7 @@ api-contracts/
 ## Product repos
 
 ### `mindblossom`
-**Purpose:** MindBlossom v2. SMS and email link aggregator with AI responses. Full-stack Phoenix app — LiveView for UI, Oban for background jobs, Guardian + Pow for auth. First product built on the Whirlwind platform.
+**Purpose:** MindBlossom v2. SMS and email link aggregator with AI responses. Full-stack Phoenix app — LiveView for UI, Oban for background jobs, Guardian + Pow for auth. First product built on Project Whirlwind.
 **Repo:** `github.com/project-whirlwind/mindblossom`
 **Status:** Planned
 **Stack:** Elixir / Phoenix, LiveView, PostgreSQL, Oban

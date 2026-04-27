@@ -1,6 +1,6 @@
 # Repo Structure Standards
 
-Every service and product repo in the Whirlwind org follows this baseline structure. Consistency means any engineer can orient in any repo within minutes.
+Every service and product repo in the Project Whirlwind org follows this baseline structure. Consistency means any engineer can orient in any repo within minutes.
 
 ---
 

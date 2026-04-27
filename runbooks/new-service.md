@@ -1,6 +1,6 @@
 # Runbook: Create a new platform service
 
-Follow these steps when adding a new shared service to the Whirlwind platform.
+Follow these steps when adding a new shared service to Project Whirlwind.
 
 ---
 

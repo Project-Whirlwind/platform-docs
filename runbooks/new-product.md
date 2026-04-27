@@ -1,6 +1,6 @@
 # Runbook: Create a new product
 
-Follow these steps when building a new product on the Whirlwind platform.
+Follow these steps when building a new product on Project Whirlwind.
 
 ---
 

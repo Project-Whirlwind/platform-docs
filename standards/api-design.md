@@ -1,6 +1,6 @@
 # API Design Standards
 
-These conventions apply to every HTTP API in the Whirlwind platform. Consistency here is what makes services feel like one platform rather than N separate projects.
+These conventions apply to every HTTP API in Project Whirlwind. Consistency here is what makes services feel like one platform rather than N separate projects.
 
 ---
 
