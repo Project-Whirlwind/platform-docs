@@ -1,9 +1,11 @@
-# Runbook: VPS Setup — Hostinger + Dokploy
+# Runbook: VPS Setup — Hetzner + Cloudflare + Tailscale + Dokploy
 
 This runbook covers provisioning the Project Whirlwind VPS and deploying
 the first two services (mindblossom + comm-gateway).
 
-**Provider:** Hostinger KVM
+**Provider:** Hetzner Cloud
+**DNS/CDN:** Cloudflare
+**Admin access:** Tailscale
 **Stack:** Ubuntu 24.04 LTS, Dokploy, Docker, Traefik, Let's Encrypt
 
 ---
@@ -12,8 +14,9 @@ the first two services (mindblossom + comm-gateway).
 
 Before starting, have these ready:
 
-- [ ] Hostinger account
-- [ ] Domain name decided and registrar access (to set DNS)
+- [ ] Hetzner Cloud account (cloud.hetzner.com)
+- [ ] Cloudflare account with domain registered or transferred
+- [ ] Tailscale account (tailscale.com — free for 3 users)
 - [ ] SSH public key (`~/.ssh/id_ed25519.pub` or similar)
 - [ ] Twilio Account SID + Auth Token
 - [ ] Mailgun API key + webhook signing key (once domain is sorted)
@@ -23,46 +26,84 @@ Before starting, have these ready:
 
 ## Step 1 — Provision the VPS
 
-In Hostinger hPanel → VPS → Create new:
+In Hetzner Cloud Console → Projects → Add Server:
 
 | Setting | Value |
 |---|---|
-| Plan | **KVM 2** (2 vCPU, 8GB RAM, 100GB NVMe) |
-| OS | **OS with Panel → Dokploy** (ships with Ubuntu 24.04 LTS) |
-| Datacenter | Closest to primary users |
-| SSH key | Paste your public key |
+| Location | Closest to primary users (Ashburn for US, Nuremberg/Helsinki for EU) |
+| Image | **Ubuntu 24.04** |
+| Type | **CAX21** (2 vCPU ARM, 8GB RAM, 80GB NVMe — €6.90/mo) |
+| SSH keys | Add your public key |
+| Firewall | Create new — see Step 3 |
 
-> **Why KVM 2?** Comfortable headroom for mindblossom + comm-gateway + postgres
-> + redis + TigerBeetle + Dokploy/Traefik now, with room to add ai-gateway
-> and the blogging app without migrating.
-
-> **Why 24.04 LTS and not 25.10?** Non-LTS Ubuntu releases get 9 months of
-> security support. 24.04 LTS is supported until April 2029. Always use LTS
-> on servers.
+> **Why CAX21?** ARM works perfectly with Docker and Elixir. 8GB gives comfortable
+> headroom for the full platform. CAX21 is ~3× cheaper than equivalent DigitalOcean.
+>
+> **Why Ubuntu 24.04 LTS?** Supported until April 2029. Never use non-LTS on servers —
+> interim releases (25.10 etc.) get 9 months of support then go EOL.
 
 ---
 
-## Step 2 — DNS
+## Step 2 — DNS (Cloudflare)
 
-As soon as Hostinger provides the VPS IP, create these DNS records at your registrar:
+As soon as Hetzner provides the VPS IP, create these records in Cloudflare:
 
-| Type | Name | Value | TTL |
+| Type | Name | Value | Proxy | Notes |
+|---|---|---|---|---|
+| A | `@` | `YOUR_VPS_IP` | DNS only | Root domain |
+| A | `app` | `YOUR_VPS_IP` | ✅ Proxied | mindblossom — CDN on |
+| A | `comms` | `YOUR_VPS_IP` | DNS only | comm-gateway webhooks — proxy off, Twilio posts directly |
+| A | `in` | `YOUR_VPS_IP` | DNS only | Mailgun inbound email |
+
+> **Why proxy off for `comms.`?** Twilio and Mailgun POST webhooks directly to your
+> server. Cloudflare proxy adds unnecessary hops and can interfere with request
+> headers used in webhook signature validation.
+
+DNS propagation takes 5–30 minutes. Traefik can't issue TLS certs until it resolves.
+
+---
+
+## Step 3 — Hetzner firewall
+
+In Hetzner Cloud → Firewalls → Create Firewall, allow inbound:
+
+| Protocol | Port | Source | Purpose |
 |---|---|---|---|
-| A | `@` | `YOUR_VPS_IP` | 300 |
-| A | `app` | `YOUR_VPS_IP` | 300 — mindblossom |
-| A | `comms` | `YOUR_VPS_IP` | 300 — comm-gateway |
-| A | `in` | `YOUR_VPS_IP` | 300 — Mailgun inbound email |
+| TCP | 22 | Your IP only (or Tailscale range) | SSH |
+| TCP | 80 | Any | HTTP (Traefik redirects to HTTPS) |
+| TCP | 443 | Any | HTTPS |
 
-DNS propagation takes 5–30 minutes. Traefik can't issue TLS certificates
-until it resolves, so set DNS before configuring Dokploy.
+**Do NOT open port 3000.** Dokploy admin is Tailscale-only (Step 4).
+
+Apply this firewall to the server.
 
 ---
 
-## Step 3 — First SSH login
+## Step 4 — Tailscale (lock down admin access)
+
+SSH in as root, then install Tailscale before anything else:
 
 ```bash
 ssh root@YOUR_VPS_IP
 
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up
+
+# Note your Tailscale IP — looks like 100.x.x.x
+tailscale ip
+```
+
+On your dev machine, also run `tailscale up` if not already installed (`brew install tailscale`).
+
+From this point, access the server via its **Tailscale IP** for all admin work.
+Dokploy runs at `http://100.x.x.x:3000` — visible only on your Tailnet, invisible to the internet.
+
+---
+
+## Step 5 — First login and server hardening
+
+```bash
 # Create a non-root deploy user
 adduser deploy
 usermod -aG sudo deploy
@@ -75,30 +116,25 @@ sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
 systemctl restart ssh
 
-# Firewall
-ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw allow 3000
-ufw enable
-
-# Verify Dokploy is running (pre-installed by Hostinger)
-systemctl status dokploy
+# Install Dokploy (installs Docker as a dependency — ~30 seconds)
+curl -sSL https://dokploy.com/install.sh | sh
 ```
 
-Dokploy UI is at `http://YOUR_VPS_IP:3000` — first visit creates your admin account.
+Dokploy is now running. Access it at `http://YOUR_TAILSCALE_IP:3000`.
 
 ---
 
-## Step 4 — Dokploy initial configuration
+## Step 6 — Dokploy initial configuration
 
-1. Open `http://YOUR_VPS_IP:3000` and create the admin account
-2. **Settings → Git Providers → GitHub** — connect your GitHub account or add a deploy key for the `project-whirlwind` org
-3. **Settings → Domain** — set your Dokploy UI domain (e.g., `dokploy.yourdomain.com`) so the panel gets HTTPS
-4. **Settings → Let's Encrypt** — add your email for cert notifications
+1. Open `http://YOUR_TAILSCALE_IP:3000` — first visit creates your admin account
+2. **Settings → Git Providers → GitHub** — connect the `project-whirlwind` org
+3. **Settings → Let's Encrypt** — add your email for cert notifications
 
 ---
 
-## Step 5 — Deploy comm-gateway
+## Step 7 — Deploy comm-gateway
 
-comm-gateway must be deployed first — mindblossom's inbound webhook receiver depends on it being reachable.
+comm-gateway must be deployed first — mindblossom's inbound webhook receiver depends on it.
 
 In Dokploy → **Create Application**:
 
@@ -109,15 +145,15 @@ In Dokploy → **Create Application**:
 | Branch | `main` |
 | Build type | Docker Compose |
 
-**Environment variables** (set in Dokploy UI, never in git):
+**Environment variables** (set in Dokploy UI — never in git):
 
 ```
 MIX_ENV=prod
 PORT=4001
 PHX_SERVER=true
 DATABASE_URL=ecto://comm_gateway:STRONG_PASSWORD@postgres:5432/comm_gateway_prod
-SECRET_KEY_BASE=<generate: mix phx.gen.secret>
-SERVICE_TOKEN=<generate: mix phx.gen.secret | head -c 32>
+SECRET_KEY_BASE=<generate: openssl rand -base64 64>
+SERVICE_TOKEN=<generate: openssl rand -hex 32>
 OUTBOUND_SERVICE_TOKEN=<same token — must match COMM_GATEWAY_SERVICE_TOKEN in mindblossom>
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_AUTH_TOKEN=...
@@ -126,14 +162,13 @@ MAILGUN_DOMAIN=...
 MAILGUN_WEBHOOK_SIGNING_KEY=...
 SMS_EVENT_SUBSCRIBER_URL=http://mindblossom:4000/v1/internal/sms_received
 EMAIL_EVENT_SUBSCRIBER_URL=http://mindblossom:4000/v1/internal/email_received
+TRAEFIK_ENABLE=true
+COMM_GATEWAY_HOST=comms.yourdomain.com
 ```
-
-> comm-gateway's `docker-compose.yml` needs Traefik labels added before first
-> deploy — see Step 7 below.
 
 ---
 
-## Step 6 — Deploy mindblossom
+## Step 8 — Deploy mindblossom
 
 In Dokploy → **Create Application**:
 
@@ -152,123 +187,77 @@ PORT=4000
 PHX_SERVER=true
 PHX_HOST=app.yourdomain.com
 DATABASE_URL=ecto://mindblossom:STRONG_PASSWORD@postgres:5432/mindblossom_prod
-SECRET_KEY_BASE=<generate: mix phx.gen.secret>
-GUARDIAN_SECRET_KEY=<generate: mix phx.gen.secret | head -c 64>
+SECRET_KEY_BASE=<generate: openssl rand -base64 64>
+GUARDIAN_SECRET_KEY=<generate: openssl rand -base64 64>
 COMM_GATEWAY_URL=http://comm-gateway:4001
 COMM_GATEWAY_SERVICE_TOKEN=<same as OUTBOUND_SERVICE_TOKEN in comm-gateway>
-INBOUND_EMAIL_DOMAIN=in.yourdomain.com
+TRAEFIK_ENABLE=true
+MINDBLOSSOM_HOST=app.yourdomain.com
 ```
+
+> **Traefik labels are already in the docker-compose.yml** — activated by setting
+> `TRAEFIK_ENABLE=true` and the `*_HOST` variable. No code changes needed.
 
 ---
 
-## Step 7 — Add Traefik labels to service docker-compose files
+## Step 9 — Run migrations
 
-Before deploying, each service needs Traefik routing labels added to its
-`docker-compose.yml`. This is a one-time code change — commit and push, then
-trigger the deploy in Dokploy.
-
-**comm-gateway:**
-```yaml
-services:
-  app:
-    build:
-      context: .
-      target: prod
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.comm-gateway.rule=Host(`comms.yourdomain.com`)"
-      - "traefik.http.routers.comm-gateway.tls.certresolver=letsencrypt"
-      - "traefik.http.services.comm-gateway.loadbalancer.server.port=4001"
-    # No ports: section — Traefik handles external routing
-```
-
-**mindblossom:**
-```yaml
-services:
-  app:
-    build:
-      context: .
-      target: prod
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mindblossom.rule=Host(`app.yourdomain.com`)"
-      - "traefik.http.routers.mindblossom.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mindblossom.loadbalancer.server.port=4000"
-```
-
-> **Important:** Database services (postgres, redis) must have **no `ports:`
-> section** in production compose files. They're internal-only. Only Phoenix
-> app services get Traefik labels and external exposure.
-
----
-
-## Step 8 — Run migrations
-
-After first deploy, run migrations via Dokploy's terminal or SSH:
+In Dokploy → each application → **Terminal**:
 
 ```bash
-# In Dokploy → comm-gateway → Terminal
+# comm-gateway
 mix ecto.migrate
 
-# In Dokploy → mindblossom → Terminal
+# mindblossom
 mix ecto.migrate
 ```
 
 ---
 
-## Step 9 — Update Twilio webhook to VPS URL
+## Step 10 — Update Twilio webhook
 
-Once comm-gateway is deployed and healthy:
+Once comm-gateway is deployed and healthy at `https://comms.yourdomain.com/health`:
 
 ```
 # In a Claude session with the Twilio MCP loaded:
 # "Update the Twilio webhook for +15109747342 to https://comms.yourdomain.com/v1/webhooks/twilio/sms"
 ```
 
-This replaces the ngrok URL permanently. ngrok is no longer needed for daily use.
+ngrok is now retired for daily use.
 
 ---
 
-## Step 10 — Smoke test
+## Step 11 — Smoke test
 
 ```bash
-# comm-gateway health
-curl https://comms.yourdomain.com/health
-
-# mindblossom health
-curl https://app.yourdomain.com/health
-
-# Send a real SMS to +15109747342 and confirm it appears in the feed
+curl https://comms.yourdomain.com/health   # {"status":"healthy",...}
+curl https://app.yourdomain.com/health     # {"status":"healthy",...}
+# Send an SMS to +15109747342 — should appear in feed within seconds
 ```
 
 ---
 
-## Passwords and secrets
+## Secrets management
 
 Generate all production secrets before deploying. Never reuse dev values:
 
 ```bash
-# In any Elixir environment (or locally if mix is installed)
-mix phx.gen.secret          # SECRET_KEY_BASE (64+ chars)
-mix phx.gen.secret | head -c 32   # shorter tokens
-
-# Or use openssl
-openssl rand -hex 32        # service tokens
-openssl rand -base64 64     # secret key base
+openssl rand -base64 64   # SECRET_KEY_BASE, GUARDIAN_SECRET_KEY
+openssl rand -hex 32      # service tokens
 ```
 
-Store the values in a password manager (1Password, Bitwarden) — not in any file
-that could be committed. Dokploy's environment variable UI is the only place
-they should live.
+Store in a password manager (1Password, Bitwarden). Dokploy's env UI is the
+only place production secrets should exist — not in any file, not in git.
 
 ---
 
 ## Architecture notes
 
-- Services communicate internally using Docker service names (`http://comm-gateway:4001`)
-- Traefik handles all public HTTPS routing and certificate renewal
-- PostgreSQL and Redis are internal-only — no public ports
-- TigerBeetle requires `--privileged` in the Dokploy service config (set at service level)
-- Each service deploys independently — deploying mindblossom never touches comm-gateway
+- Services communicate internally via Docker service names (`http://comm-gateway:4001`)
+- Traefik handles all public HTTPS routing and certificate renewal — activated per-service by `TRAEFIK_ENABLE=true`
+- PostgreSQL and Redis: internal only, no public ports
+- TigerBeetle: requires `--privileged` in Dokploy service config
+- Dokploy admin panel: Tailscale-only, never exposed publicly
+- Each service deploys independently — pushing to mindblossom never touches comm-gateway
 
-See [ADR-006](../decisions/ADR-006-dokploy.md) for the full deployment rationale.
+See [ADR-006](../decisions/ADR-006-dokploy.md) for deployment rationale.
