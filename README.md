@@ -54,6 +54,10 @@ This repo is the engineering source of truth for Project Whirlwind. It documents
 - [Create a new service](runbooks/new-service.md)
 - [Create a new product](runbooks/new-product.md)
 
+### Products
+- [MindBlossom — Product Requirements](products/mindblossom/product-requirements.md) — feature status, requirements, phasing
+- [MindBlossom — SMS Command System](products/mindblossom/sms-command-system.md) — command parser, symbol registry, data model, AI tagging pipeline
+
 ---
 
 ## Org structure
