@@ -30,17 +30,21 @@ In Hetzner Cloud Console → Projects → Add Server:
 
 | Setting | Value |
 |---|---|
-| Location | Closest to primary users (Ashburn for US, Nuremberg/Helsinki for EU) |
+| Location | **Ashburn, VA** (`ash`) for US-based users |
 | Image | **Ubuntu 24.04** |
-| Type | **CAX21** (2 vCPU ARM, 8GB RAM, 80GB NVMe — €6.90/mo) |
+| Type | **CPX31** (4 vCPU x86, 8GB RAM, 160GB NVMe — $24.99/mo) |
 | SSH keys | Add your public key |
 | Firewall | Create new — see Step 3 |
 
-> **Why CAX21?** ARM works perfectly with Docker and Elixir. 8GB gives comfortable
-> headroom for the full platform. CAX21 is ~3× cheaper than equivalent DigitalOcean.
+> **Why CPX31?** 8GB gives comfortable headroom for the full platform stack (Postgres,
+> Redis, TigerBeetle, comm-gateway, mindblossom). CPX31 is the smallest x86 option with
+> 8GB RAM available in US datacenters. If your users are EU-based, use CAX21 in `hel1`
+> (ARM, €9.49/mo) — Docker and Elixir run fine on ARM.
 >
 > **Why Ubuntu 24.04 LTS?** Supported until April 2029. Never use non-LTS on servers —
 > interim releases (25.10 etc.) get 9 months of support then go EOL.
+
+**As of 2026-04-28:** Server `whirlwind-prod` (CPX31, Ashburn) is provisioned at `178.156.186.8`.
 
 ---
 
@@ -50,10 +54,10 @@ As soon as Hetzner provides the VPS IP, create these records in Cloudflare:
 
 | Type | Name | Value | Proxy | Notes |
 |---|---|---|---|---|
-| A | `@` | `YOUR_VPS_IP` | DNS only | Root domain |
-| A | `app` | `YOUR_VPS_IP` | ✅ Proxied | mindblossom — CDN on |
-| A | `comms` | `YOUR_VPS_IP` | DNS only | comm-gateway webhooks — proxy off, Twilio posts directly |
-| A | `in` | `YOUR_VPS_IP` | DNS only | Mailgun inbound email |
+| A | `@` | `178.156.186.8` | DNS only | Root domain |
+| A | `app` | `178.156.186.8` | ✅ Proxied | mindblossom — CDN on |
+| A | `comms` | `178.156.186.8` | DNS only | comm-gateway webhooks — proxy off, Twilio posts directly |
+| A | `in` | `178.156.186.8` | DNS only | Mailgun inbound email |
 
 > **Why proxy off for `comms.`?** Twilio and Mailgun POST webhooks directly to your
 > server. Cloudflare proxy adds unnecessary hops and can interfere with request
@@ -84,7 +88,7 @@ Apply this firewall to the server.
 SSH in as root, then install Tailscale before anything else:
 
 ```bash
-ssh root@YOUR_VPS_IP
+ssh root@178.156.186.8
 
 # Install Tailscale
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -163,7 +167,7 @@ MAILGUN_WEBHOOK_SIGNING_KEY=...
 SMS_EVENT_SUBSCRIBER_URL=http://mindblossom:4000/v1/internal/sms_received
 EMAIL_EVENT_SUBSCRIBER_URL=http://mindblossom:4000/v1/internal/email_received
 TRAEFIK_ENABLE=true
-COMM_GATEWAY_HOST=comms.yourdomain.com
+COMM_GATEWAY_HOST=comms.mindblossom.app
 ```
 
 ---
@@ -185,14 +189,14 @@ In Dokploy → **Create Application**:
 MIX_ENV=prod
 PORT=4000
 PHX_SERVER=true
-PHX_HOST=app.yourdomain.com
+PHX_HOST=app.mindblossom.app
 DATABASE_URL=ecto://mindblossom:STRONG_PASSWORD@postgres:5432/mindblossom_prod
 SECRET_KEY_BASE=<generate: openssl rand -base64 64>
 GUARDIAN_SECRET_KEY=<generate: openssl rand -base64 64>
 COMM_GATEWAY_URL=http://comm-gateway:4001
 COMM_GATEWAY_SERVICE_TOKEN=<same as OUTBOUND_SERVICE_TOKEN in comm-gateway>
 TRAEFIK_ENABLE=true
-MINDBLOSSOM_HOST=app.yourdomain.com
+MINDBLOSSOM_HOST=app.mindblossom.app
 ```
 
 > **Traefik labels are already in the docker-compose.yml** — activated by setting
@@ -216,11 +220,11 @@ mix ecto.migrate
 
 ## Step 10 — Update Twilio webhook
 
-Once comm-gateway is deployed and healthy at `https://comms.yourdomain.com/health`:
+Once comm-gateway is deployed and healthy at `https://comms.mindblossom.app/health`:
 
 ```
 # In a Claude session with the Twilio MCP loaded:
-# "Update the Twilio webhook for +15109747342 to https://comms.yourdomain.com/v1/webhooks/twilio/sms"
+# "Update the Twilio webhook for +15109747342 to https://comms.mindblossom.app/v1/webhooks/twilio/sms"
 ```
 
 ngrok is now retired for daily use.
@@ -230,8 +234,8 @@ ngrok is now retired for daily use.
 ## Step 11 — Smoke test
 
 ```bash
-curl https://comms.yourdomain.com/health   # {"status":"healthy",...}
-curl https://app.yourdomain.com/health     # {"status":"healthy",...}
+curl https://comms.mindblossom.app/health   # {"status":"healthy",...}
+curl https://app.mindblossom.app/health     # {"status":"healthy",...}
 # Send an SMS to +15109747342 — should appear in feed within seconds
 ```
 

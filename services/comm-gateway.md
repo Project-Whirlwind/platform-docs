@@ -93,7 +93,7 @@ Both inbound SMS and email are normalized to a standard event. Products receive 
   "type": "email_received",
   "received_at": "2026-04-26T04:00:00Z",
   "from": "sender@example.com",
-  "to": ["inbox@in.mindblossom.ai"],
+  "to": ["inbox@in.mindblossom.app"],
   "subject": "Interesting article",
   "body": "...",
   "links": ["https://example.com"],
@@ -137,6 +137,21 @@ end
 - Truncation is transparent — events carry `truncated` + `link_count_original` so products can surface this to users
 
 ---
+
+## Known gaps / future work
+
+### Twilio number provisioning (not yet built)
+
+As of 2026-04-28 the platform has a single Twilio number (`+15109747342`) manually assigned to all users. The following is not yet implemented:
+
+- **No per-user number isolation** — all users share one inbound number. Routing is by sender phone number, not recipient. There is no concept of "this number belongs to this user" from a carrier perspective.
+- **No max-users-per-number cap** — Twilio long codes are rate-limited (~1 msg/sec standard; A2P 10DLC throughput varies). No logic gates how many users are assigned per number.
+- **No number provisioning on signup** — `assigned_phone_number` is set manually via database update. There is no automated provisioning flow to acquire and assign a Twilio number when a user signs up.
+- **No spam/abuse protection on inbound SMS** — the safety limits table above documents the *planned* defaults; the per-sender rate limit (`RATE_LIMIT_PER_SENDER_HOUR`) is not yet enforced in the running service.
+- **No fallback if the number is suspended** — no alerting, no backup number, no graceful degradation if Twilio suspends the number for policy violations.
+- **`assigned_phone_number` not validated as E.164** — the field accepts any string; no format enforcement in the schema changeset.
+
+v1 addressed some of these (max users per number, round-robin assignment). These need to be re-implemented before the platform scales beyond a handful of users.
 
 ## Runbook
 
