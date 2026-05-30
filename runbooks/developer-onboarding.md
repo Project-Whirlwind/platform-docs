@@ -98,20 +98,22 @@ Production access requires Tailscale (VPN) and a Dokploy account. Only request t
 
 Dokploy's admin panel runs on port 3000 and is only reachable via Tailscale — it is not exposed to the internet.
 
-1. Install Tailscale: `brew install tailscale` (Mac) or [tailscale.com/download](https://tailscale.com/download)
-2. Ask the team lead to invite your email via the Tailscale admin console
-3. Accept the invite and run `tailscale up`
-4. Confirm connectivity: `tailscale status` — you should see the `whirlwind-prod` server listed
+1. Create a Tailscale account at [tailscale.com](https://tailscale.com) if you don't have one — use your work email
+2. Install Tailscale: `brew install --cask tailscale` (Mac) or [tailscale.com/download](https://tailscale.com/download)
+3. Launch the Tailscale app and complete the sign-in flow
+4. Ask the team lead to invite your Tailscale account email via the Tailscale admin console
+5. Accept the email invite — your device joins the tailnet
+6. Confirm: `tailscale status` — you should see `whirlwind-prod` listed
 
 ### Step 2 — Access Dokploy
 
-Once on the tailnet:
+Once on the tailnet, open:
 
 ```
-http://<whirlwind-prod-tailscale-ip>:3000
+http://whirlwind-prod:3000
 ```
 
-Ask the team lead for the server's Tailscale IP and to create your Dokploy account (Settings → Users → Invite User).
+Ask the team lead to create your Dokploy account (Settings → Users → Invite User). You'll get an email with a link to set your password on first login.
 
 ### Step 3 — Production secrets
 
