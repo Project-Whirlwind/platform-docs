@@ -24,6 +24,9 @@ This repo is the engineering source of truth for Project Whirlwind. It documents
 
 ## Navigation
 
+### Getting started
+- [Developer Onboarding](runbooks/developer-onboarding.md) — start here if you're new to the project
+
 ### Architecture
 - [Overview](architecture/overview.md) — platform diagram, principles, service topology
 - [Service Map](architecture/service-map.md) — every service, its repo, its role
@@ -51,6 +54,7 @@ This repo is the engineering source of truth for Project Whirlwind. It documents
 - [revenue-ledger](services/revenue-ledger.md) — TigerBeetle revenue tracking
 
 ### Runbooks
+- [Developer Onboarding](runbooks/developer-onboarding.md)
 - [Create a new service](runbooks/new-service.md)
 - [Create a new product](runbooks/new-product.md)
 

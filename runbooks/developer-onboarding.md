@@ -1,22 +1,62 @@
-# Runbook: Developer Onboarding
+# Developer Onboarding
 
-This runbook covers getting a new developer set up on Project Whirlwind — local dev environment first, production access second (only for devs who need it).
+## Which track do you need?
 
----
-
-## Prerequisites
-
-- Added to the `project-whirlwind` GitHub org (ask the team lead)
-- Docker Desktop installed locally
-- SSH key generated (`~/.ssh/id_ed25519` or similar)
+| I need to... | Track |
+|---|---|
+| Deploy to production or manage env vars | Track 1 |
+| Write code and run the stack locally | Track 2 |
+| Test Twilio/Mailgun webhooks locally | Track 2 + 3 |
 
 ---
 
-## Track 1 — Local Dev (everyone)
+## Track 1 — Production Access
 
-### Step 1 — Clone the repos
+Needed to deploy services, view production logs, or manage environment variables. Production is locked behind Tailscale (a private VPN) — the Dokploy admin panel is not exposed to the internet.
 
-The local stack uses Docker Compose with sibling directories. Clone them all into the same parent folder:
+### Step 1 — Join the Tailscale network
+
+1. Create a Tailscale account at [tailscale.com](https://tailscale.com) — use your PWW Github org email
+2. Install: `brew install --cask tailscale` (Mac) or [tailscale.com/download](https://tailscale.com/download)
+3. Sign in to the Tailscale app
+4. **Tell whoever manages the tailnet your Tailscale account email** — they'll invite you from [login.tailscale.com/admin/users](https://login.tailscale.com/admin/users)
+5. Accept the invite email
+6. Confirm you're on the network: `tailscale status` — you should see `whirlwind-prod`
+
+### Step 2 — Access Dokploy
+
+Open in your browser:
+
+```
+http://whirlwind-prod:3000
+```
+
+Your Dokploy account will be created by whoever manages the instance (Settings → Users → Create User). Credentials come via the team password manager — not email.
+
+### Step 3 — Production secrets
+
+Env vars are managed in the Dokploy UI only — never stored in git or shared over Slack. They'll be shared with you via the team password manager (1Password/Bitwarden). See [vps-setup.md](vps-setup.md) Steps 7–8 for the full list per service.
+
+### Step 4 — SSH access (rarely needed)
+
+Only for direct OS-level work on the server. Share your public key with whoever manages the VPS:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Once added: `ssh deploy@<whirlwind-prod-tailscale-ip>` — never SSH as root.
+
+---
+
+## Track 2 — Local Dev
+
+**Before you start:**
+- Accept the GitHub org invite for `project-whirlwind` (someone on the team sends this)
+- Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Generate an SSH key if you don't have one: `ssh-keygen -t ed25519`
+
+**Clone the repos into the same parent folder:**
 
 ```bash
 git clone git@github.com:project-whirlwind/infra-local
@@ -24,137 +64,53 @@ git clone git@github.com:project-whirlwind/mindblossom
 git clone git@github.com:project-whirlwind/comm_gateway
 ```
 
-Your directory layout should look like:
-
-```
-~/Projects/
-  infra-local/
-  mindblossom/
-  comm_gateway/
-```
-
-### Step 2 — First-time setup
+**Start the stack:**
 
 ```bash
 cd infra-local
-make init    # copies .env.example → .env, builds images, formats TigerBeetle data file
-make up      # starts postgres, redis, tigerbeetle, comm-gateway, mindblossom
-make ps      # verify all services are healthy
+make init   # copies .env.example → .env, builds images
+make up     # starts all services
 ```
 
-Confirm everything is running:
+**Verify everything is running:**
 
 ```bash
-curl http://localhost:4001/health   # comm-gateway
-curl http://localhost:4000/health   # mindblossom
+curl http://localhost:4001/health   # comm-gateway → {"status":"healthy",...}
+curl http://localhost:4000/health   # mindblossom  → {"status":"healthy",...}
 ```
 
-Both should return `{"status":"healthy",...}`.
-
-### Step 3 — Day-to-day workflow
+**Day-to-day:**
 
 ```bash
-make logs service=mindblossom   # tail logs for one service
-make shell service=mindblossom  # open IEx shell
-make migrate                    # run Ecto migrations after schema changes
-make restart service=mindblossom  # restart without rebuild (Phoenix hot-reloads automatically)
+make logs service=mindblossom    # tail logs
+make shell service=mindblossom   # IEx shell
+make migrate                     # run migrations
+make help                        # full command list
 ```
-
-Run `make help` for the full command list.
 
 ---
 
-## Track 2 — Webhook Testing (optional)
+## Track 3 — Webhook Testing (optional)
 
-If you need Twilio or Mailgun webhooks to reach your local machine, you need your own ngrok account and static domain. The ngrok service is already wired into `docker-compose.yml` — you just need to supply credentials.
+Needed only if you're testing Twilio/Mailgun webhooks locally. You'll need a free [ngrok](https://ngrok.com) account with a static domain.
 
-1. Sign up at [ngrok.com](https://ngrok.com) (free tier is sufficient)
-2. Go to ngrok dashboard → Domains → claim a free static domain
-3. Add to your `infra-local/.env`:
+1. Sign up at ngrok.com → Domains → claim a free static domain
+2. Add to `infra-local/.env`:
 
 ```
 NGROK_AUTHTOKEN=your-auth-token
 NGROK_DOMAIN=your-domain.ngrok-free.app
 ```
 
-4. Start ngrok alongside the stack:
+3. Run: `docker compose up ngrok -d`
 
-```bash
-make up        # core services
-docker compose up ngrok -d   # tunnel
-```
+Inspector runs at `http://localhost:4040`.
 
-The ngrok web inspector runs at `http://localhost:4040`.
-
-> **Note:** The Twilio phone number can only point to one webhook URL at a time. Coordinate with the team on who owns the webhook when testing SMS locally. See [vps-setup.md](vps-setup.md) for the production webhook URL.
-
----
-
-## Track 3 — Production Access (deployers only)
-
-Production access requires Tailscale (VPN) and a Dokploy account. Only request this if you need to deploy or debug production services.
-
-### Step 1 — Join the Tailscale tailnet
-
-Dokploy's admin panel runs on port 3000 and is only reachable via Tailscale — it is not exposed to the internet.
-
-1. Create a Tailscale account at [tailscale.com](https://tailscale.com) if you don't have one — use your work email
-2. Install Tailscale: `brew install --cask tailscale` (Mac) or [tailscale.com/download](https://tailscale.com/download)
-3. Launch the Tailscale app and complete the sign-in flow
-4. Ask the team lead to invite your Tailscale account email via the Tailscale admin console
-5. Accept the email invite — your device joins the tailnet
-6. Confirm: `tailscale status` — you should see `whirlwind-prod` listed
-
-### Step 2 — Access Dokploy
-
-Once on the tailnet, open:
-
-```
-http://whirlwind-prod:3000
-```
-
-Ask the team lead to create your Dokploy account (Settings → Users → Invite User). You'll get an email with a link to set your password on first login.
-
-### Step 3 — Production secrets
-
-Production environment variables are managed in the Dokploy UI only — they are never stored in git or sent over Slack/email. The team lead will share them via the team password manager (1Password/Bitwarden).
-
-For the full list of required env vars per service, see [vps-setup.md](vps-setup.md), Steps 7–8.
-
-### Step 4 — SSH access (direct server access)
-
-Only needed if you're doing OS-level work on the VPS. Provide your SSH public key to the team lead:
-
-```bash
-cat ~/.ssh/id_ed25519.pub
-```
-
-They'll add it to `/home/deploy/.ssh/authorized_keys`. You then SSH as:
-
-```bash
-ssh deploy@<whirlwind-prod-tailscale-ip>
-```
-
-Never SSH as root — the root login is disabled.
-
----
-
-## Checklist
-
-| Step | Who | Required for |
-|------|-----|-------------|
-| Added to GitHub org | Team lead | Everyone |
-| Clone repos + `make init && make up` | You | Local dev |
-| ngrok token + static domain | You | Webhook testing |
-| Tailscale invite accepted | Team lead + you | Prod access |
-| Dokploy account created | Team lead | Prod access |
-| Prod secrets shared via password manager | Team lead | Prod access |
-| SSH key added to server | Team lead | Direct server access |
+> The Twilio number can only point to one webhook at a time — coordinate with the team before redirecting it.
 
 ---
 
 ## Related docs
 
-- [vps-setup.md](vps-setup.md) — full production infrastructure setup
-- [ADR-006-dokploy.md](../decisions/ADR-006-dokploy.md) — why Dokploy was chosen
-- [ADR-001-polyrepo.md](../decisions/ADR-001-polyrepo.md) — repo structure rationale
+- [vps-setup.md](vps-setup.md) — production infrastructure
+- [ADR-006-dokploy.md](../decisions/ADR-006-dokploy.md) — why Dokploy
