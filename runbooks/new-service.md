@@ -124,6 +124,7 @@ services:
 | `comm-gateway` | 4001 |
 | `ai-gateway` | 4002 |
 | `revenue-ledger` | 4003 |
+| `price-watcher` | 4004 |
 | PostgreSQL | 5432 |
 | TigerBeetle | 3001 |
 | Redis | 6379 |

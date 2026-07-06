@@ -42,6 +42,7 @@ This repo is the engineering source of truth for Project Whirlwind. It documents
 - [ADR-007 — comm-gateway abstraction](decisions/ADR-007-comm-gateway.md)
 - [ADR-008 — ai-gateway abstraction](decisions/ADR-008-ai-gateway.md)
 - [ADR-009 — api-contracts as interface source of truth](decisions/ADR-009-api-contracts.md)
+- [ADR-010 - price-watcher price-change detection](decisions/ADR-010-price-watcher.md)
 
 ### Standards
 - [API Design](standards/api-design.md) — REST conventions, versioning, error format
@@ -52,6 +53,7 @@ This repo is the engineering source of truth for Project Whirlwind. It documents
 - [comm-gateway](services/comm-gateway.md) — SMS and email integrations
 - [ai-gateway](services/ai-gateway.md) — AI provider abstraction and conversation management
 - [revenue-ledger](services/revenue-ledger.md) — TigerBeetle revenue tracking
+- [price-watcher](services/price-watcher.md) - price-change detection for saved product links
 
 ### Runbooks
 - [Developer Onboarding](runbooks/developer-onboarding.md)
@@ -76,6 +78,7 @@ github.com/project-whirlwind/
   comm-gateway           ← SMS/email integration service
   ai-gateway             ← AI provider proxy and conversation layer
   revenue-ledger         ← TigerBeetle financial tracking service
+  price-watcher          ← price-change detection for saved product links
 
   # Products
   mindblossom            ← MindBlossom v2 (Phoenix full-stack, LiveView)
