@@ -82,6 +82,19 @@ api-contracts/
 
 ---
 
+### `price-watcher`
+**Purpose:** Scheduled price-change detection for product URLs. Normalizes URLs to canonical product rows so N watchers of one item cost one fetch. Extracts prices via JSON-LD/OG/microdata with per-vendor politeness, and emits webhooks on confirmed drops or product removals. Internal only (no public host, no Traefik router).
+**Repo:** `github.com/project-whirlwind/price-watcher`
+**Status:** Planned
+**Stack:** Elixir / Phoenix, Oban, PostgreSQL, Req, Floki
+**Exposes:**
+- `POST /v1/watches` - create a price watch for a product URL and subscriber
+- `DELETE /v1/watches/:id` - remove a watch (idempotent)
+- `GET /health` - health check, no auth required
+**Full spec:** `services/price-watcher.md`
+
+---
+
 ### `platform-docs`
 **Purpose:** This repo. Architecture decisions, standards, runbooks.
 **Repo:** `github.com/project-whirlwind/platform-docs`
@@ -96,7 +109,7 @@ api-contracts/
 **Repo:** `github.com/project-whirlwind/mindblossom`
 **Status:** Planned
 **Stack:** Elixir / Phoenix, LiveView, PostgreSQL, Oban
-**Depends on:** `comm-gateway`, `ai-gateway`, `revenue-ledger`
+**Depends on:** `comm-gateway`, `ai-gateway`, `revenue-ledger`, `price-watcher`
 **Consumes contracts:** `api-contracts/comm-gateway`, `api-contracts/ai-gateway`, `api-contracts/revenue-ledger`
 
 ---
